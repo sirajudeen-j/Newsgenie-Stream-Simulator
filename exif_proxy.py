@@ -829,12 +829,14 @@ async def poison_live_blob(blob_b64, metadata, overrides, session_id):
                 stype = stream.get("codec_type")
                 if stype == "video":
                     for sk, sv in stags.items():
-                        if sk.lower() != "encoder":
+                        if sk.lower() not in ("encoder", "creation_time"):
                             cmd.extend([f"-metadata:s:v:0", f"{sk}={sv}"])
+                    cmd.extend(["-metadata:s:v:0", f"creation_time={fmt_tags.get('creation_time', '')}"])
                 elif stype == "audio":
                     for sk, sv in stags.items():
-                        if sk.lower() != "encoder":
+                        if sk.lower() not in ("encoder", "creation_time"):
                             cmd.extend([f"-metadata:s:a:0", f"{sk}={sv}"])
+                    cmd.extend(["-metadata:s:a:0", f"creation_time={fmt_tags.get('creation_time', '')}"])
         
         # Strip encoder fingerprints
         cmd.extend([
