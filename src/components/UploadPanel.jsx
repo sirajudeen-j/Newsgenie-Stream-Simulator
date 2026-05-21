@@ -49,7 +49,7 @@ export default function UploadPanel({ backendUrl, uploaderId, incidentId, teleme
               lon: telemetry.injected_lon || telemetry.device_lon,
               model: telemetry.injected_model || telemetry.device_model,
               manufacturer: telemetry.device_manufacturer,
-              creation_time: telemetry.injected_time ? new Date(telemetry.injected_time).toISOString() : new Date().toISOString()
+              creation_time: telemetry.injected_time ? new Date(telemetry.injected_time + 'Z').toISOString() : new Date().toISOString()
             },
             fingerprint: telemetry.preserve_fingerprint,
             strip_audio: telemetry.strip_audio
@@ -72,7 +72,7 @@ export default function UploadPanel({ backendUrl, uploaderId, incidentId, teleme
       const finalBlob = new Blob([byteArray], { type: uploadFile.type })
 
       const telemetryPayload = {
-        telemetry_timestamp: telemetry.claimed_time ? new Date(telemetry.claimed_time).getTime() : Date.now(),
+        telemetry_timestamp: telemetry.claimed_time ? new Date(telemetry.claimed_time + 'Z').getTime() : Date.now(),
         network_time_offset_ms: Number(telemetry.network_time_offset_ms || 0),
         device_manufacturer: telemetry.device_manufacturer,
         device_model: telemetry.device_model,

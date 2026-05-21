@@ -257,7 +257,7 @@ export default function VideoStreaming({
           lon: tel.injected_lon || tel.device_lon,
           model: tel.injected_model || tel.device_model,
           manufacturer: tel.device_manufacturer,
-          creation_time: tel.injected_time ? new Date(tel.injected_time).toISOString() : new Date().toISOString(),
+          creation_time: tel.injected_time ? new Date(tel.injected_time + 'Z').toISOString() : new Date().toISOString(),
           enabled: tel.enable_injection,
         }
       }
@@ -423,7 +423,7 @@ export default function VideoStreaming({
       sendNextSegment()
     }
     
-    // 5s TELEMETRY PING (Heartbeat to Proxy)
+    // 10s TELEMETRY PING to BE (updates claimed device position)
     const pingInterval = setInterval(() => {
       if (!streamingRef.current || !wsRef.current) {
         clearInterval(pingInterval)
@@ -433,15 +433,19 @@ export default function VideoStreaming({
       const ping = {
         type: 'TELEMETRY_UPDATE',
         data: {
-          lat: tel.injected_lat || tel.device_lat,
-          lon: tel.injected_lon || tel.device_lon,
-          model: tel.injected_model || tel.device_model,
-          manufacturer: tel.device_manufacturer,
-          enabled: tel.enable_injection,
+          telemetry_timestamp: Date.now(),
+          network_time_offset_ms: Number(tel.network_time_offset_ms) || 0,
+          device_manufacturer: tel.device_manufacturer,
+          device_model: tel.device_model,
+          android_sdk: Number(tel.android_sdk) || 34,
+          android_release: String(tel.android_release) || '14',
+          device_lat: Number(tel.device_lat),
+          device_lon: Number(tel.device_lon),
+          geo_accuracy_m: Number(tel.geo_accuracy_m) || 15.0,
         }
       }
       wsRef.current.send(JSON.stringify(ping))
-    }, 5000)
+    }, 10000)
     
   }, [addLog, setWsStatus, sendNextSegment, sendNextLiveChunk, wsRef, fileBuffer, videoDuration, liveMode, sessionId])
 
@@ -472,7 +476,7 @@ export default function VideoStreaming({
         createdAt: createdAt,
         backend_ws_url: beWsUrl,
         telemetry: {
-          telemetry_timestamp: tel.claimed_time ? new Date(tel.claimed_time).getTime() : Date.now(),
+          telemetry_timestamp: tel.claimed_time ? new Date(tel.claimed_time + 'Z').getTime() : Date.now(),
           network_time_offset_ms: Number(tel.network_time_offset_ms) || 0,
           device_manufacturer: tel.device_manufacturer || 'Samsung',
           device_model: tel.device_model || 'Galaxy S24',
