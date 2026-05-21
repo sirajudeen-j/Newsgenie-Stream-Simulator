@@ -473,12 +473,17 @@ async def websocket_bridge(websocket: WebSocket):
                     await websocket.send_json({"type": "ERROR", "message": f"BE Connection Failed: {str(e)}"})
                     continue
 
-            # 2. Handle Telemetry Updates (store locally, do NOT forward to BE)
+            # 2. Handle Telemetry Updates (forward to BE + store locally)
             elif msg.get("type") == "TELEMETRY_UPDATE":
                 tel_data = msg.get("data", {})
                 if session_id and session_id in SESSIONS:
                     SESSIONS[session_id]["latest_forensics"] = tel_data
-                logger.debug("Telemetry updated for session %s", session_id)
+                if be_ws and be_ack_event.is_set():
+                    try:
+                        await be_ws.send(json.dumps(msg))
+                        logger.info("TELEMETRY_UPDATE forwarded to BE for session %s", session_id)
+                    except Exception as e:
+                        logger.warning("Failed to forward telemetry to BE: %s", e)
                 continue
 
             # 3. Handle FILE CHUNKS (FE-cut segments with EXIF)
@@ -689,7 +694,7 @@ async def merge_and_poison_chunks(chunk_paths, metadata, overrides, session_id, 
                 "-c:v", "libx264", "-preset", "ultrafast", "-crf", "26",
                 "-c:a", "aac", "-r", "15",
                 "-vf", "scale='min(1920,iw)':-2",
-                "-movflags", "+faststart",
+                "-movflags", "+faststart+use_metadata_tags",
                 inter_path
             ]
             proc = await asyncio.to_thread(subprocess.run, re_cmd, capture_output=True)
@@ -712,7 +717,7 @@ async def merge_and_poison_chunks(chunk_paths, metadata, overrides, session_id, 
             "ffmpeg", "-y", "-f", "concat", "-safe", "0",
             "-i", concat_list,
             "-c", "copy",
-            "-movflags", "+faststart",
+            "-movflags", "+faststart+use_metadata_tags",
             merged_tmp
         ]
         proc = await asyncio.to_thread(subprocess.run, concat_cmd, capture_output=True)
@@ -745,7 +750,7 @@ async def merge_and_poison_chunks(chunk_paths, metadata, overrides, session_id, 
             "-metadata:s:v", "encoder=",
             "-metadata:s:a", "encoder=",
             "-fflags", "+bitexact",
-            "-movflags", "+faststart",
+            "-movflags", "+faststart+use_metadata_tags",
             "-brand", "mp42",
             "-f", "mp4", out_tmp
         ])
@@ -809,9 +814,27 @@ async def poison_live_blob(blob_b64, metadata, overrides, session_id):
                 fmt_tags["com.android.manufacturer"] = overrides["manufacturer"]
             if overrides.get("creation_time"):
                 fmt_tags["creation_time"] = overrides["creation_time"]
+        # Always set creation_time to avoid drift (even if injection disabled)
+        if "creation_time" not in fmt_tags:
+            from datetime import datetime, timezone
+            fmt_tags["creation_time"] = overrides.get("creation_time") or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000000Z")
             
         for k, v in fmt_tags.items():
             cmd.extend(["-metadata", f"{k}={v}"])
+        
+        # Stream-level tags from template
+        if overrides.get("enabled", True):
+            for stream in metadata.get("streams", []):
+                stags = stream.get("tags", {})
+                stype = stream.get("codec_type")
+                if stype == "video":
+                    for sk, sv in stags.items():
+                        if sk.lower() != "encoder":
+                            cmd.extend([f"-metadata:s:v:0", f"{sk}={sv}"])
+                elif stype == "audio":
+                    for sk, sv in stags.items():
+                        if sk.lower() != "encoder":
+                            cmd.extend([f"-metadata:s:a:0", f"{sk}={sv}"])
         
         # Strip encoder fingerprints
         cmd.extend([
@@ -819,7 +842,7 @@ async def poison_live_blob(blob_b64, metadata, overrides, session_id):
             "-metadata:s:v", "encoder=",
             "-metadata:s:a", "encoder=",
             "-fflags", "+bitexact",
-            "-movflags", "+faststart",
+            "-movflags", "+faststart+use_metadata_tags",
             "-brand", "mp42",
             "-f", "mp4", out_tmp
         ])
@@ -868,7 +891,7 @@ async def cut_and_poison(source_path, seg_idx, metadata, overrides, session_id):
             "-preset", "superfast", 
             "-crf", "23",
             "-c:a", "aac",                    # Unified audio
-            "-movflags", "+faststart", 
+            "-movflags", "+faststart+use_metadata_tags", 
             "-avoid_negative_ts", "make_zero", seg_tmp
         ]
         await asyncio.to_thread(subprocess.run, cut_cmd, capture_output=True, check=True)
@@ -887,7 +910,7 @@ async def cut_and_poison(source_path, seg_idx, metadata, overrides, session_id):
             for k, v in fmt_tags.items():
                 cmd.extend(["-metadata", f"{k}={v}"])
                 
-            cmd.extend(["-movflags", "+faststart", out_tmp])
+            cmd.extend(["-movflags", "+faststart+use_metadata_tags", out_tmp])
             await asyncio.to_thread(subprocess.run, cmd, capture_output=True, check=True)
         else:
             # Just copy the clean segment
