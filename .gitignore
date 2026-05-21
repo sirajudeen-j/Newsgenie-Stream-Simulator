@@ -1,0 +1,43 @@
+# Dependencies
+node_modules
+# Build output
+dist/
+build/
+
+# Vite
+.vite/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# FFmpeg temp files
+*.tmp
+
+# Proxy artifacts
+forensic_segments/
+captures/
+live_chunks/
+
+# Logs
+*.log
+*.zip 
