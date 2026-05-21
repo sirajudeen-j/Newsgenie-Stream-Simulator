@@ -257,7 +257,7 @@ export default function VideoStreaming({
           lon: tel.injected_lon || tel.device_lon,
           model: tel.injected_model || tel.device_model,
           manufacturer: tel.device_manufacturer,
-          creation_time: tel.injected_time ? new Date(tel.injected_time).toISOString() : new Date().toISOString(),
+          creation_time: tel.injected_time ? new Date(tel.injected_time + 'Z').toISOString() : new Date().toISOString(),
           enabled: tel.enable_injection,
         }
       }
@@ -476,7 +476,7 @@ export default function VideoStreaming({
         createdAt: createdAt,
         backend_ws_url: beWsUrl,
         telemetry: {
-          telemetry_timestamp: tel.claimed_time ? new Date(tel.claimed_time).getTime() : Date.now(),
+          telemetry_timestamp: tel.claimed_time ? new Date(tel.claimed_time + 'Z').getTime() : Date.now(),
           network_time_offset_ms: Number(tel.network_time_offset_ms) || 0,
           device_manufacturer: tel.device_manufacturer || 'Samsung',
           device_model: tel.device_model || 'Galaxy S24',

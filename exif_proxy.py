@@ -413,8 +413,16 @@ async def websocket_bridge(websocket: WebSocket):
                     
                     if be_ws:
                         try:
+                            # Sync telemetry_timestamp right before sending segment
+                            from datetime import datetime, timezone
+                            now_utc_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+                            tel_sync = json.dumps({
+                                "type": "TELEMETRY_UPDATE",
+                                "data": {"telemetry_timestamp": now_utc_ms}
+                            })
+                            await be_ws.send(tel_sync)
                             await be_ws.send(p_b64)
-                            logger.info("Courier: Relayed Segment %d to BE. Waiting for ACK...", idx)
+                            logger.info("Courier: Relayed Segment %d to BE (ts_sync=%d). Waiting for ACK...", idx, now_utc_ms)
                         except Exception as relay_err:
                             logger.error("Courier: Relay failed for segment %d: %s", idx, relay_err)
                             be_ack_event.set() # Don't hang if connection dies
@@ -500,7 +508,7 @@ async def websocket_bridge(websocket: WebSocket):
                         continue
                     
                     overrides = msg.get("forensic_overrides", {})
-                    exif_template = msg.get("exif_template", metadataTemplate)
+                    exif_template = msg.get("exif_template") or metadataTemplate or {}
                     sess_id = msg.get("session_id", session_id)
                     
                     logger.info("[Seg %d] FILE_CHUNK received. Poisoning...", idx)
@@ -517,6 +525,28 @@ async def websocket_bridge(websocket: WebSocket):
                     # Relay directly to BE
                     await be_ack_event.wait()
                     be_ack_event.clear()
+                    
+                    # Sync telemetry_timestamp with EXIF creation_time right before sending
+                    # The BE compares these two — they must match
+                    from datetime import datetime, timezone
+                    now_utc_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+                    tel_sync = json.dumps({
+                        "type": "TELEMETRY_UPDATE",
+                        "data": {
+                            "telemetry_timestamp": now_utc_ms,
+                            "network_time_offset_ms": overrides.get("network_time_offset_ms", 50),
+                            "device_manufacturer": overrides.get("manufacturer", "Samsung"),
+                            "device_model": overrides.get("model", "Galaxy S24"),
+                            "android_sdk": 34,
+                            "android_release": "14",
+                            "device_lat": overrides.get("lat", 0),
+                            "device_lon": overrides.get("lon", 0),
+                            "geo_accuracy_m": 15.0,
+                        }
+                    })
+                    await be_ws.send(tel_sync)
+                    logger.info("[Seg %d] Telemetry synced (ts=%d) before segment relay", idx, now_utc_ms)
+                    
                     await be_ws.send(p_b64)
                     logger.info("[Seg %d] Poisoned & Relayed to BE ✓", idx)
                     
@@ -739,8 +769,12 @@ async def merge_and_poison_chunks(chunk_paths, metadata, overrides, session_id, 
                 fmt_tags["com.android.model"] = overrides["model"]
             if overrides.get("manufacturer"):
                 fmt_tags["com.android.manufacturer"] = overrides["manufacturer"]
-            if overrides.get("creation_time"):
-                fmt_tags["creation_time"] = overrides["creation_time"]
+        
+        # Use FE's creation_time override (matches telemetry timestamp) or fallback to UTC now
+        # ALWAYS stamp to NOW so it matches the latest telemetry_timestamp (Date.now())
+        from datetime import datetime, timezone
+        fmt_tags["creation_time"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000000Z")
+        logger.info("[MergePoison] creation_time=%s", fmt_tags.get("creation_time"))
         
         for k, v in fmt_tags.items():
             cmd.extend(["-metadata", f"{k}={v}"])
@@ -775,6 +809,8 @@ async def merge_and_poison_chunks(chunk_paths, metadata, overrides, session_id, 
 
 async def poison_live_blob(blob_b64, metadata, overrides, session_id):
     """Transmuxes a raw camera blob (WebM/MP4) into a header-complete poisoned MP4."""
+    metadata = metadata or {}
+    overrides = overrides or {}
     work_dir = tempfile.mkdtemp()
     in_tmp = os.path.join(work_dir, "input.webm")
     out_tmp = os.path.join(work_dir, "out.mp4")
@@ -814,10 +850,11 @@ async def poison_live_blob(blob_b64, metadata, overrides, session_id):
                 fmt_tags["com.android.manufacturer"] = overrides["manufacturer"]
             if overrides.get("creation_time"):
                 fmt_tags["creation_time"] = overrides["creation_time"]
-        # Always set creation_time to avoid drift (even if injection disabled)
-        if "creation_time" not in fmt_tags:
-            from datetime import datetime, timezone
-            fmt_tags["creation_time"] = overrides.get("creation_time") or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000000Z")
+        # ALWAYS stamp creation_time to NOW (UTC) so it matches the latest telemetry_timestamp
+        # The BE compares telemetry_timestamp (Date.now()) vs EXIF creation_time — they must be close
+        from datetime import datetime, timezone
+        fmt_tags["creation_time"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000000Z")
+        logger.info("[Poison] creation_time=%s, enabled=%s", fmt_tags.get("creation_time"), overrides.get("enabled"))
             
         for k, v in fmt_tags.items():
             cmd.extend(["-metadata", f"{k}={v}"])
@@ -930,7 +967,7 @@ async def cut_and_poison(source_path, seg_idx, metadata, overrides, session_id):
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)
 
-@app.get("/health")
+@app.get("/healthCheck")
 async def health():
     print("Health Check")
     return {"status": "healthy", "service": "newsgenie-forensic-proxy"}
@@ -938,4 +975,4 @@ async def health():
 if __name__ == "__main__":
     import uvicorn
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8001
-    uvicorn.run(app, host="0.0.0.0", port=port, ws_max_size=100 * 1024 * 1024)
+    uvicorn.run("exif_proxy:app", host="0.0.0.0", port=port, ws_max_size=100 * 1024 * 1024, reload=True)
