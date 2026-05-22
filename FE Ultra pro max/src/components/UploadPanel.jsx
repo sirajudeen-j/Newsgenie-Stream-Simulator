@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react'
 
-export default function UploadPanel({ backendUrl, uploaderId, incidentId, telemetry, addLog, setAuditResult, proxyFetch }) {
+export default function UploadPanel({ backendUrl, uploaderId, incidentId, userType, eventType, telemetry, addLog, setAuditResult, proxyFetch }) {
   const [uploading, setUploading] = useState(false)
   const [uploadFile, setUploadFile] = useState(null)
   const fileRef = useRef(null)
@@ -71,8 +71,10 @@ export default function UploadPanel({ backendUrl, uploaderId, incidentId, teleme
       const byteArray = new Uint8Array(byteNumbers)
       const finalBlob = new Blob([byteArray], { type: uploadFile.type })
 
+      const claimedDate = new Date()
       const telemetryPayload = {
-        telemetry_timestamp: telemetry.claimed_time ? new Date(telemetry.claimed_time + 'Z').getTime() : Date.now(),
+        telemetry_timestamp: claimedDate.getTime(),
+        telemetry_iso: claimedDate.toISOString(),
         network_time_offset_ms: Number(telemetry.network_time_offset_ms || 0),
         device_manufacturer: telemetry.device_manufacturer,
         device_model: telemetry.device_model,
@@ -81,15 +83,20 @@ export default function UploadPanel({ backendUrl, uploaderId, incidentId, teleme
         capture_mode: 'CLIP',
         device_lat: Number(telemetry.device_lat),
         device_lon: Number(telemetry.device_lon),
-        geo_accuracy_m: Number(telemetry.geo_accuracy_m || 15)
+        geo_accuracy_m: Number(telemetry.geo_accuracy_m || 15),
+        claimed_location: {
+          caption: telemetry.claimed_location_caption || 'Unknown location',
+          latitude: Number(telemetry.device_lat),
+          longitude: Number(telemetry.device_lon),
+        },
       }
 
       const formData = new FormData()
       formData.append('video', finalBlob, uploadFile.name)
       formData.append('uploader_id', uploaderId.trim())
-      formData.append('user_type', 'normal')
-      formData.append('event_type', 'general')
-      formData.append('incident_id', incidentId.trim() || '')
+      formData.append('user_type', userType)
+      formData.append('event_type', eventType)
+      if (incidentId.trim()) formData.append('incident_id', incidentId.trim())
       formData.append('telemetry', JSON.stringify(telemetryPayload))
 
       const path = '/api/v1/upload-video'

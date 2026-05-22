@@ -6,6 +6,7 @@ import TelemetryPanel from './components/TelemetryPanel'
 import UploadPanel from './components/UploadPanel'
 import EventLog from './components/EventLog'
 import AuditResultCard from './components/AuditResultCard'
+import TrustIndexCalculator from './components/TrustIndexCalculator'
 import './App.css'
 
 const formatTime = () => {
@@ -23,9 +24,12 @@ export default function App() {
   const [mode, setMode] = useState('STREAMING')
   const [uploaderId, setUploaderId] = useState(DEFAULT_UPLOADER)
   const [incidentId, setIncidentId] = useState(DEFAULT_INCIDENT)
+  const [userType, setUserType] = useState('normal')
+  const [eventType, setEventType] = useState('Crime')
   const [logs, setLogs] = useState([])
   const [wsStatus, setWsStatus] = useState('IDLE')
   const [auditResults, setAuditResults] = useState([])
+  const [latestScores, setLatestScores] = useState(null)
   const addAuditResult = useCallback((result) => {
     setAuditResults(prev => [result, ...prev])
   }, [])
@@ -37,6 +41,7 @@ export default function App() {
     device_manufacturer: 'Samsung', device_model: 'Galaxy S24',
     android_sdk: 34, android_release: '14', capture_mode: 'STREAMING',
     claimed_time: new Date().toISOString().slice(0, 19),
+    claimed_location_caption: 'Chennai, Tamil Nadu',
     enable_injection: false,
     strip_audio: false,
     preserve_fingerprint: false,
@@ -82,6 +87,8 @@ export default function App() {
     setVideoId(null)
     setUploaderId(DEFAULT_UPLOADER)
     setIncidentId(DEFAULT_INCIDENT)
+    setUserType('normal')
+    setEventType('Crime')
     setMode('STREAMING')
     setWsStatus('IDLE')
     setLogs([])
@@ -130,6 +137,8 @@ export default function App() {
           <StartStream
             backendUrl={backendUrl} uploaderId={uploaderId} setUploaderId={setUploaderId}
             incidentId={incidentId} setIncidentId={setIncidentId}
+            userType={userType} setUserType={setUserType}
+            eventType={eventType} setEventType={setEventType}
             mode={mode} setMode={setMode}
             sessionId={sessionId} setSessionId={setSessionId}
             setVideoId={setVideoId} addLog={addLog}
@@ -139,10 +148,13 @@ export default function App() {
           <VideoStreaming
             backendUrl={backendUrl}
             sessionId={sessionId} setSessionId={setSessionId}
-            videoId={videoId} uploaderId={uploaderId} mode={mode}
+            videoId={videoId} uploaderId={uploaderId}
+            userType={userType} eventType={eventType}
+            mode={mode}
             wsRef={wsRef} wsStatus={wsStatus} setWsStatus={setWsStatus}
             telemetry={telemetry} addLog={addLog} clearLog={clearLog}
             setAuditResult={addAuditResult}
+            setLatestScores={setLatestScores}
             proxyFetch={proxyFetch}
           />
         </div>
@@ -150,11 +162,14 @@ export default function App() {
           <UploadPanel
             backendUrl={backendUrl}
             uploaderId={uploaderId} incidentId={incidentId}
+            userType={userType} eventType={eventType}
             telemetry={telemetry} addLog={addLog}
             setAuditResult={addAuditResult}
+            setLatestScores={setLatestScores}
             proxyFetch={proxyFetch}
           />
           <TelemetryPanel telemetry={telemetry} setTelemetry={setTelemetry} mode={mode} />
+          <TrustIndexCalculator latestScores={latestScores} />
         </div>
         <div className="col">
           <EventLog logs={logs} clearLog={clearLog} />

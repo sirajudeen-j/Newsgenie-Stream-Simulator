@@ -103,8 +103,8 @@ function cutSegmentFromFile(fileBuffer, startSec, durationSec) {
 
 export default function VideoStreaming({
   backendUrl, sessionId, setSessionId, videoId,
-  uploaderId, mode, wsRef, wsStatus, setWsStatus,
-  telemetry, addLog, clearLog, setAuditResult,
+  uploaderId, userType, eventType, mode, wsRef, wsStatus, setWsStatus,
+  telemetry, addLog, clearLog, setAuditResult, setLatestScores,
   proxyFetch,
 }) {
   const [fileBuffer, setFileBuffer] = useState(null)
@@ -468,15 +468,24 @@ export default function VideoStreaming({
       const baseBE = backendUrl.replace(/\/+$/, '').replace(/^http/, 'ws')
       const beWsUrl = `${baseBE}/api/v1/ws/stream/`
 
-      const createdAt = new Date().toISOString()
+      const createdAt = new Date().toISOString().split('.')[0] + 'Z'
 
       const meta = {
         uploader_id: uploaderId.trim(),
+        user_type: userType,
+        event_type: eventType,
         session_id: sessionId.trim(),
         createdAt: createdAt,
         backend_ws_url: beWsUrl,
+        claimed_location: {
+          caption: tel.claimed_location_caption || 'Unknown location',
+          latitude: Number(tel.device_lat) || 0,
+          longitude: Number(tel.device_lon) || 0,
+        },
+        video: null,
         telemetry: {
-          telemetry_timestamp: tel.claimed_time ? new Date(tel.claimed_time + 'Z').getTime() : Date.now(),
+          telemetry_timestamp: Date.now(),
+          telemetry_iso: new Date().toISOString(),
           network_time_offset_ms: Number(tel.network_time_offset_ms) || 0,
           device_manufacturer: tel.device_manufacturer || 'Samsung',
           device_model: tel.device_model || 'Galaxy S24',
@@ -526,6 +535,11 @@ export default function VideoStreaming({
           
           const l6 = d?.layer6
           const policy = l6?.decision?.policy_status
+          const inputScores = l6?.input_scores
+
+          if (inputScores && setLatestScores) {
+            setLatestScores(inputScores)
+          }
 
           if (policy) {
             setAuditResult({
@@ -536,7 +550,7 @@ export default function VideoStreaming({
               mas_score: l6?.input_scores?.mas_score,
               cis_score: l6?.input_scores?.cis_score,
               srs_score: l6?.input_scores?.srs_score,
-              ti_score: l6?.computed?.ti_score,
+              ti_score: l6?.policy_evaluation?.trustworthiness_index || l6?.computed?.ti_score,
               context: l6?.layer5?.context || l6?.audit?.context,
               segment_index: d?.fragment_index || d?.segment_index,
               timestamp: new Date().toLocaleTimeString(),
@@ -555,7 +569,7 @@ export default function VideoStreaming({
       setWsConnected(false)
       wsRef.current = null
     }
-  }, [sessionId, backendUrl, uploaderId, addLog, setWsStatus, wsRef, setAuditResult, fileBuffer, liveMode, startStreaming, sendNextLiveChunk])
+  }, [sessionId, backendUrl, uploaderId, userType, eventType, addLog, setWsStatus, wsRef, setAuditResult, fileBuffer, liveMode, startStreaming, sendNextLiveChunk])
 
 
   useEffect(() => { sendNextRef.current = sendNextSegment }, [sendNextSegment])
