@@ -71,7 +71,7 @@ export default function UploadPanel({ backendUrl, uploaderId, incidentId, userTy
       const byteArray = new Uint8Array(byteNumbers)
       const finalBlob = new Blob([byteArray], { type: uploadFile.type })
 
-      const claimedDate = telemetry.claimed_time ? new Date(telemetry.claimed_time + 'Z') : new Date()
+      const claimedDate = new Date()
       const telemetryPayload = {
         telemetry_timestamp: claimedDate.getTime(),
         telemetry_iso: claimedDate.toISOString(),

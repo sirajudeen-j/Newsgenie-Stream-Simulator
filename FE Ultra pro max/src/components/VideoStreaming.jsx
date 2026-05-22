@@ -484,8 +484,8 @@ export default function VideoStreaming({
         },
         video: null,
         telemetry: {
-          telemetry_timestamp: tel.claimed_time ? new Date(tel.claimed_time + 'Z').getTime() : Date.now(),
-          telemetry_iso: tel.claimed_time ? new Date(tel.claimed_time + 'Z').toISOString() : new Date().toISOString(),
+          telemetry_timestamp: Date.now(),
+          telemetry_iso: new Date().toISOString(),
           network_time_offset_ms: Number(tel.network_time_offset_ms) || 0,
           device_manufacturer: tel.device_manufacturer || 'Samsung',
           device_model: tel.device_model || 'Galaxy S24',
