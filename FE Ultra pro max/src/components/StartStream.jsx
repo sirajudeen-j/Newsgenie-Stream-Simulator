@@ -9,6 +9,7 @@ function randomUUID() {
 
 export default function StartStream({
   backendUrl, uploaderId, setUploaderId, incidentId, setIncidentId,
+  userType, setUserType, eventType, setEventType,
   mode, setMode, sessionId, setSessionId, setVideoId, addLog,
   setWsStatus, telemetry, setTelemetry, proxyFetch,
 }) {
@@ -24,8 +25,8 @@ export default function StartStream({
 
     const body = {
       uploader_id: uploaderId.trim(),
-      user_type: 'normal',
-      event_type: 'general',
+      user_type: userType,
+      event_type: eventType,
       incident_id: incidentId.trim() || null,
       mode,
     }
@@ -64,6 +65,34 @@ export default function StartStream({
           <label>Incident ID (optional)</label>
           <input value={incidentId} onChange={e => setIncidentId(e.target.value)}
             placeholder="Leave blank for standalone" />
+        </div>
+      </div>
+      <div className="row">
+        <div>
+          <label>User Type</label>
+          <select value={userType} onChange={e => setUserType(e.target.value)}>
+            <option value="normal">normal</option>
+            <option value="journalist">journalist</option>
+          </select>
+        </div>
+        <div>
+          <label>Event Type</label>
+          <select value={eventType} onChange={e => setEventType(e.target.value)}>
+            <option value="Crime">Crime</option>
+            <option value="Violence">Violence</option>
+            <option value="Emergency">Emergency</option>
+            <option value="Public Safety">Public Safety</option>
+            <option value="Protest">Protest</option>
+            <option value="Civil Unrest">Civil Unrest</option>
+            <option value="Disaster">Disaster</option>
+            <option value="Major Incident">Major Incident</option>
+            <option value="Conflict">Conflict</option>
+            <option value="Military Activity">Military Activity</option>
+            <option value="Celebrity">Celebrity</option>
+            <option value="Sports">Sports</option>
+            <option value="Entertainment">Entertainment</option>
+            <option value="General">General</option>
+          </select>
         </div>
       </div>
       <label>Mode</label>
