@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react'
+import { buildL1Payload } from '../utils/buildL1Payload'
 
-export default function UploadPanel({ backendUrl, uploaderId, incidentId, userType, eventType, telemetry, addLog, setAuditResult, setLatestScores }) {
+export default function UploadPanel({ backendUrl, uploaderId, incidentId, userType, eventType, telemetry, addLog, setAuditResult, setLatestScores, l1Config }) {
   const [uploading, setUploading] = useState(false)
   const [uploadFile, setUploadFile] = useState(null)
   const fileRef = useRef(null)
@@ -25,7 +26,6 @@ export default function UploadPanel({ backendUrl, uploaderId, incidentId, userTy
 
       const telemetryPayload = JSON.stringify({
         telemetry_timestamp: claimedDate.getTime(),
-        telemetry_iso: claimedDate.toISOString(),
         network_time_offset_ms: Number(telemetry.network_time_offset_ms || 0),
         device_manufacturer: telemetry.device_manufacturer,
         device_model: telemetry.device_model,
@@ -35,11 +35,7 @@ export default function UploadPanel({ backendUrl, uploaderId, incidentId, userTy
         device_lat: Number(telemetry.device_lat),
         device_lon: Number(telemetry.device_lon),
         geo_accuracy_m: Number(telemetry.geo_accuracy_m || 15),
-        claimed_location: {
-          caption: telemetry.claimed_location_caption || 'Unknown location',
-          latitude: Number(telemetry.device_lat),
-          longitude: Number(telemetry.device_lon),
-        },
+        ...buildL1Payload(l1Config, telemetry),
       })
 
       const formData = new FormData()

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
+import { buildL1Payload } from '../utils/buildL1Payload'
 
 function arrayBufferToBase64(buf) {
   let bin = ''
@@ -11,7 +12,7 @@ function arrayBufferToBase64(buf) {
 export default function VideoStreaming({
   backendUrl, sessionId, setSessionId, videoId,
   uploaderId, userType, eventType, mode, wsRef, wsStatus, setWsStatus,
-  telemetry, addLog, clearLog, setAuditResult, setLatestScores,
+  telemetry, addLog, clearLog, setAuditResult, setLatestScores, l1Config,
 }) {
   const [fileBuffer, setFileBuffer] = useState(null)
   const [fileName, setFileName] = useState('')
@@ -25,6 +26,9 @@ export default function VideoStreaming({
   const sendNextRef = useRef(null)
 
   useEffect(() => { telemetryRef.current = telemetry }, [telemetry])
+
+  const l1ConfigRef = useRef(l1Config)
+  useEffect(() => { l1ConfigRef.current = l1Config }, [l1Config])
 
   const buildTelemetryPayload = useCallback((tel, captureMode) => {
     const claimedDate = tel.claimed_time ? new Date(tel.claimed_time) : new Date()
@@ -104,6 +108,7 @@ export default function VideoStreaming({
       setWsConnected(true)
 
       const tel = telemetryRef.current
+      const l1 = l1ConfigRef.current
       const createdAt = new Date().toISOString().split('.')[0] + 'Z'
 
       const meta = {
@@ -114,7 +119,10 @@ export default function VideoStreaming({
         createdAt,
         claimed_location: buildClaimedLocation(tel),
         video: null,
-        telemetry: buildTelemetryPayload(tel, mode),
+        telemetry: {
+          ...buildTelemetryPayload(tel, mode),
+          ...buildL1Payload(l1, tel),
+        },
       }
       addLog('Sending metadata', 'send')
       ws.send(JSON.stringify(meta))
